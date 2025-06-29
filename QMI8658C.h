@@ -7,24 +7,37 @@
  */
 
 #ifndef _QMI8658C_H_
-
 #define _QMI8658C_H_
 #include <Arduino.h>
+
 class QMI8658C
 {
 public:
+  QMI8658C() : lastTime(millis()), lastCallTime(millis()) {} // 初始化
   bool QMI8658C_dveInit(void);
   bool QMI8658C_dveGetEulerAngles(float *gyro, float *yaw);
   bool QMI8658C_dveGetEulerAngles(float *yaw);
   void QMI8658C_Check(void);
-
+  // Add sensor fusion function
+  void updateFusedData(float *pitch, float *roll, float *yaw);
+  void initFusion();
 public:
   int16_t ax, ay, az, gx, gy, gz;
+  float filtered_pitch = 0, filtered_roll = 0, filtered_yaw = 0;
   float pith, roll, yaw;
-  unsigned long now, lastTime = 0;
+  unsigned long lastTime;
+  unsigned long lastCallTime;
   float dt;      //微分时间
   float agz = 0; //角度变量
+  long gxo = 0;  //陀螺仪偏移量
+  long gyo = 0;  //陀螺仪偏移量
   long gzo = 0;  //陀螺仪偏移量
+  
+  // Add quaternion and filter variables
+  float q0, q1, q2, q3;  // Quaternion components
+  float beta;             // Filter gain parameter
+  float zeta;             // Gyro drift compensation
+  float integralFBx, integralFBy, integralFBz;  // Integral feedback
 };
 
 /*----------------------------------------------------------------------------------------------
