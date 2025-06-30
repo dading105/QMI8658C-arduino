@@ -227,16 +227,23 @@ void QMI8658C::updateFusedData(float *pitch, float *roll, float *yaw) {
   // Serial.print("dt: ");
   // Serial.println(dt);
 
+  const float GYRO_SCALE = (128.0f / 32768.0f) * (M_PI / 180.0f);
+  const float ACCEL_SCALE = 2.0f / 32768.0f;
   // Convert to proper units
-  float ax_g = (ax - axo) * (2.0f / 32768.0f);
-  float ay_g = (ay - ayo) * (2.0f / 32768.0f);
-  float az_g = (az - azo) * (2.0f / 32768.0f);
-  float gx_rad = (gx - gxo) * (128.0f / 32768.0f) * (M_PI / 180.0f);
-  float gy_rad = (gy - gyo) * (128.0f / 32768.0f) * (M_PI / 180.0f);
-  float gz_rad = (gz - gzo) * (128.0f / 32768.0f) * (M_PI / 180.0f);
+  float ax_g = (ax - axo) * (ACCEL_SCALE);
+  float ay_g = (ay - ayo) * (ACCEL_SCALE);
+  float az_g = (az - azo) * (ACCEL_SCALE);
+  // float ax_g = (ax) * (2.0f / 32768.0f);
+  // float ay_g = (ay) * (2.0f / 32768.0f);
+  // float az_g = (az) * (2.0f / 32768.0f);
+  float gx_rad = (gx - gxo) * GYRO_SCALE;
+  float gy_rad = (gy - gyo) * GYRO_SCALE;
+  float gz_rad = (gz - gzo) * GYRO_SCALE;
   // float gx_rad = (gx) * (128.0f / 32768.0f) * (M_PI / 180.0f);
   // float gy_rad = (gy) * (128.0f / 32768.0f) * (M_PI / 180.0f);
   // float gz_rad = (gz) * (128.0f / 32768.0f) * (M_PI / 180.0f);
+
+  
 
   // Normalize accelerometer measurement
   float norm_a = ax_g * ax_g + ay_g * ay_g + az_g * az_g;
@@ -284,11 +291,15 @@ void QMI8658C::updateFusedData(float *pitch, float *roll, float *yaw) {
   // Normalize quaternion
   // 在四元数更新后添加：
   float norm_q = q0*q0 + q1*q1 + q2*q2 + q3*q3;
-  if (norm_q < 1e-7f) {
-      initFusion(); // 重新初始化四元数
-      return;
+  if (norm_q > 1e-7f) {
+    recipNorm = 1.0f / sqrt(norm_q);
+    // ...归一化...
+  } else {
+    // 软恢复不重置
+    recipNorm = 1.0f / sqrt(4.0f);
+    q0 = 1.0f; 
+    q1 = q2 = q3 = 0.0f;
   }
-  recipNorm = 1.0f / sqrt(norm_q);
   //recipNorm = 1.0f / sqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
   q0 *= recipNorm;
   q1 *= recipNorm;
@@ -309,16 +320,27 @@ void QMI8658C::updateFusedData(float *pitch, float *roll, float *yaw) {
   *yaw = atan2(q1*q2 + q0*q3, 0.5f - q2*q2 - q3*q3) * 180.0f / M_PI;
 
   // 角度解缠绕
-  if (fabs(*yaw - last_yaw) > 300) {
+  if (fabs(*yaw - last_yaw) > 180.0f) {
     if (*yaw > 0) *yaw -= 360;
     else *yaw += 360;
   }
   last_yaw = *yaw;
 
+  if (fabs(gz_rad) < 0.005f) {
+    if (last_movement_time == 0) last_movement_time = now;
+    if (now - last_movement_time > 2000) {
+      drift_compensation += *yaw * 0.0001f;  // 使用当前值
+    }
+  } else {
+    last_movement_time = 0;
+    drift_compensation *= 0.99f;  // 运动时衰减补偿
+  }
+  *yaw -= drift_compensation;  // 最后应用补偿
+
   // 低通滤波 (0.2为滤波系数，值越小越平滑)
   // const float filterFactor = 0.2f;
   const float rollPitchFilterFactor = 0.2f;
-  const float yawFilterFactor = 0.03f;
+  const float yawFilterFactor = 0.05f;
   
   filtered_roll = filtered_roll*(1-rollPitchFilterFactor) + *roll*rollPitchFilterFactor;
   filtered_pitch = filtered_pitch*(1-rollPitchFilterFactor) + *pitch*rollPitchFilterFactor;
@@ -335,5 +357,11 @@ void QMI8658C::updateFusedData(float *pitch, float *roll, float *yaw) {
   // *roll = filtered_roll;
   // *pitch = filtered_pitch;
   // *yaw = filtered_yaw;
+  Serial.print("Yaw: ");
+  Serial.print(*yaw);
+  Serial.print(" DriftComp: ");
+  Serial.print(drift_compensation);
+  Serial.print(" StaticTime: ");
+  Serial.println(last_movement_time > 0 ? millis() - last_movement_time : 0);
 
 }

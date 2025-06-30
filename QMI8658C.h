@@ -41,6 +41,13 @@ public:
   float integralFBx, integralFBy, integralFBz;  // Integral feedback
 
   float last_yaw = 0;  // 新增：用于角度解缠绕
+
+  float drift_compensation = 0;
+  unsigned long last_movement_time = 0;
+
+  float ref_pitch = 0, ref_roll = 0;
+  int wrap_count = 0;          // 解绕圈数计数器
+  float last_raw_yaw = 0.0f;      // 上次原始角度值
 };
 
 /*----------------------------------------------------------------------------------------------
