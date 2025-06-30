@@ -64,6 +64,29 @@ bool QMI8658C::QMI8658C_dveInit(void) {
   Serial.print(" Z:");
   Serial.println(gzo);
 
+  // 在校准循环中添加加速度计采样
+  for (int i = 0; i < times; i++) {
+    ax = QMI8658C_readBytes(AccX_L);
+    ay = QMI8658C_readBytes(AccY_L);
+    az = QMI8658C_readBytes(AccZ_L);
+    
+    // 原有陀螺仪校准...
+    axo += ax;
+    ayo += ay;
+    azo += az;
+  }
+  axo /= times;
+  ayo /= times;
+  azo /= times;
+
+  // 输出校准值
+  Serial.print("Acc Offsets X:");
+  Serial.print(axo);
+  Serial.print(" Y:");
+  Serial.print(ayo);
+  Serial.print(" Z:");
+  Serial.println(azo);
+
   initFusion();
   return false;
 }
@@ -205,9 +228,9 @@ void QMI8658C::updateFusedData(float *pitch, float *roll, float *yaw) {
   // Serial.println(dt);
 
   // Convert to proper units
-  float ax_g = ax * (2.0f / 32768.0f);
-  float ay_g = ay * (2.0f / 32768.0f);
-  float az_g = az * (2.0f / 32768.0f);
+  float ax_g = (ax - axo) * (2.0f / 32768.0f);
+  float ay_g = (ay - ayo) * (2.0f / 32768.0f);
+  float az_g = (az - azo) * (2.0f / 32768.0f);
   float gx_rad = (gx - gxo) * (128.0f / 32768.0f) * (M_PI / 180.0f);
   float gy_rad = (gy - gyo) * (128.0f / 32768.0f) * (M_PI / 180.0f);
   float gz_rad = (gz - gzo) * (128.0f / 32768.0f) * (M_PI / 180.0f);
@@ -285,14 +308,32 @@ void QMI8658C::updateFusedData(float *pitch, float *roll, float *yaw) {
   
   *yaw = atan2(q1*q2 + q0*q3, 0.5f - q2*q2 - q3*q3) * 180.0f / M_PI;
 
+  // 角度解缠绕
+  if (fabs(*yaw - last_yaw) > 300) {
+    if (*yaw > 0) *yaw -= 360;
+    else *yaw += 360;
+  }
+  last_yaw = *yaw;
+
   // 低通滤波 (0.2为滤波系数，值越小越平滑)
-  const float filterFactor = 0.2f;
+  // const float filterFactor = 0.2f;
+  const float rollPitchFilterFactor = 0.2f;
+  const float yawFilterFactor = 0.03f;
   
-  filtered_roll = filtered_roll*(1-filterFactor) + *roll*filterFactor;
-  filtered_pitch = filtered_pitch*(1-filterFactor) + *pitch*filterFactor;
-  filtered_yaw = filtered_yaw*(1-filterFactor) + *yaw*filterFactor;
+  filtered_roll = filtered_roll*(1-rollPitchFilterFactor) + *roll*rollPitchFilterFactor;
+  filtered_pitch = filtered_pitch*(1-rollPitchFilterFactor) + *pitch*rollPitchFilterFactor;
+  filtered_yaw = filtered_yaw*(1-yawFilterFactor) + *yaw*yawFilterFactor;
   
   *roll = filtered_roll;
   *pitch = filtered_pitch;
   *yaw = filtered_yaw;
+  
+  // filtered_roll = filtered_roll*(1-filterFactor) + *roll*filterFactor;
+  // filtered_pitch = filtered_pitch*(1-filterFactor) + *pitch*filterFactor;
+  // filtered_yaw = filtered_yaw*(1-filterFactor) + *yaw*filterFactor;
+  
+  // *roll = filtered_roll;
+  // *pitch = filtered_pitch;
+  // *yaw = filtered_yaw;
+
 }

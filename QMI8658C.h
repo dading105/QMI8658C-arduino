@@ -32,12 +32,15 @@ public:
   long gxo = 0;  //陀螺仪偏移量
   long gyo = 0;  //陀螺仪偏移量
   long gzo = 0;  //陀螺仪偏移量
+  long axo = 0, ayo = 0, azo = 0;
   
   // Add quaternion and filter variables
   float q0, q1, q2, q3;  // Quaternion components
   float beta;             // Filter gain parameter
   float zeta;             // Gyro drift compensation
   float integralFBx, integralFBy, integralFBz;  // Integral feedback
+
+  float last_yaw = 0;  // 新增：用于角度解缠绕
 };
 
 /*----------------------------------------------------------------------------------------------
