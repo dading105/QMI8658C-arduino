@@ -38,7 +38,7 @@ bool QMI8658C::QMI8658C_dveInit(void)
   //I2Cdev::writeByte(address, CTRL2, 0x04); //Accelerometer Settings<±2g  500Hz>
   I2Cdev::writeByte(address, CTRL2, 0x0c); //Accelerometer Settings<±2g  128Hz>
   //I2Cdev::writeByte(address, CTRL3, 0x64); //Gyroscope Settings< ±2048dps 500Hz>
-  I2Cdev::writeByte(address, CTRL3, 0x36); //Gyroscope Settings< ±2048dps 117.5Hz>
+  I2Cdev::writeByte(address, CTRL3, 0x36); //Gyroscope Settings< ±128dps 117.5Hz>
   I2Cdev::writeByte(address, CTRL5, 0x11); //Sensor Data Processing Settings<Enable Gyroscope Accelerometer 低通滤波>
 
   delay(2000);
@@ -150,4 +150,66 @@ void QMI8658C::QMI8658C_Check(void)
     HDSC_IIC_Test();
     //delay(1);
   }
+}
+
+// 获取三轴姿态（核心函数）
+bool QMI8658C::getAttitude(float* pitch, float* roll, float* yaw) {
+    // 1. 读取6轴原始数据
+    ax = QMI8658C_readBytes(AccX_L);
+    ay = QMI8658C_readBytes(AccY_L);
+    az = QMI8658C_readBytes(AccZ_L);
+    gx = QMI8658C_readBytes(GyrX_L);
+    gy = QMI8658C_readBytes(GyrY_L);
+    gz = QMI8658C_readBytes(GyrZ_L);
+
+    Serial.print("Raw: ax ay az gx gy gz: ");
+    Serial.print(ax); Serial.print(", ");
+    Serial.print(ay); Serial.print(", ");
+    Serial.print(az); Serial.print(", ");
+    Serial.print(gx); Serial.print(", ");
+    Serial.print(gy); Serial.print(", ");
+    Serial.println(gz);
+
+    // 2. 转换为物理单位 (防止数据溢出)
+    const float acc_scale = 16384.0f; // ±2g量程的灵敏度
+    const float gyr_scale = 256.0f;   // ±128dps量程的灵敏度
+    
+    float ax_g = ax / acc_scale;
+    float ay_g = ay / acc_scale;
+    float az_g = az / acc_scale;
+
+    // 3. 计算时间差
+    unsigned long now = millis();
+    dt = (now - lastTime) / 1000.0f;
+    lastTime = now;
+
+    // 4. 加速度计计算姿态（带溢出保护）
+    float denom = ay_g * ay_g + az_g * az_g;
+    
+    // 防护1：确保分母为正
+    if (denom <= 0) {
+        *pitch = this->pitch; // 使用上一次有效值
+    } else {
+        *pitch = atan2(-ax_g, sqrt(denom)) * RAD_TO_DEG;
+    }
+    
+    // 防护2：roll计算同样需要保护
+    if (fabs(az_g) < 0.001f) {
+        *roll = this->roll;
+    } else {
+        *roll = atan2(ay_g, az_g) * RAD_TO_DEG;
+    }
+
+    // 5. 陀螺仪计算yaw
+    float gyroz = -(gz - gzo) / gyr_scale * dt;
+    if (fabs(gyroz) <= 0.05f) gyroz = 0;
+    agz += gyroz;
+    *yaw = agz;
+
+    // 6. 更新类成员
+    this->pitch = *pitch;
+    this->roll = *roll;
+    this->yaw = *yaw;
+
+    return true;
 }

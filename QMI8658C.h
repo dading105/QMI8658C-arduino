@@ -10,6 +10,10 @@
 
 #define _QMI8658C_H_
 #include <Arduino.h>
+#include <math.h>
+
+#define RAD_TO_DEG 57.29577951308232
+
 class QMI8658C
 {
 public:
@@ -17,10 +21,11 @@ public:
   bool QMI8658C_dveGetEulerAngles(float *gyro, float *yaw);
   bool QMI8658C_dveGetEulerAngles(float *yaw);
   void QMI8658C_Check(void);
+  bool getAttitude(float* pitch, float* roll, float* yaw); // 新增姿态获取函数
 
 public:
   int16_t ax, ay, az, gx, gy, gz;
-  float pith, roll, yaw;
+  float pitch, roll, yaw;
   unsigned long now, lastTime = 0;
   float dt;      //微分时间
   float agz = 0; //角度变量
