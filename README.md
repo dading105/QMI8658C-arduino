@@ -1,3 +1,5 @@
+加入卡尔曼滤波+定期校准算法  
+
 Arduino+qmi8658c传感器驱动  
 qmi8658c.cpp当打开I2Cdev::writeByte(address, CTRL7, 0x01); //Power-down Mode  
 可在极低功耗运行  
